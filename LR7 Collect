@@ -1,0 +1,187 @@
+@echo off
+
+REM *** Data collection script for Windows - version 1.3	// Noa Kotler																							
+REM *** ==========================================================																						
+REM *** This script collects the following data from the system into "C:\Logrhythm\CollectedData": 														
+REM *** DX, ES and Mediator logs, DX Configuration files, Grafana stats (Influx DB files), environment variables and ES stats (using curl commands). 	
+REM ***	By default, the script collects the files updated in the last 3 days. The script can accept 2 arguments:										 
+REM *** Number of days to collect and performance counters path.																						
+REM *** If performance counters path is passed, the script will also collect the PID and command line of the Java processes. 							
+REM *** Example: LR7_CollectData 7 "c:\Perflogs" - will collect data updated in the last 7 days and include all perfromace counters in c:\Perflogs.		
+REM *** Version 1.2 add the curl path to the PATH enviroment variables to allow running the curl commands without manually adding it.
+REM *** Version 1.3 (3/17/2016): added collection of Windows application event logs, added support for "\" in computer name, added some more logging.
+REM *** Modified 5/10/17 by Luke Brewbaker 
+
+
+set baseDestinationDir=c:\Logrhythm\CollectedData\
+
+if not exist "%baseDestinationDir%" mkdir "%baseDestinationDir%"
+
+REM Setup a timestamp to use for a directory name
+
+set hh=%time:~-11,2%
+set /a hh=%hh%+100
+set hh=%hh:~1%
+set dateseed=%date:~10,4%%date:~4,2%%date:~7,2%_%hh%%time:~3,2%%time:~6,2%
+
+set destinationDir="%baseDestinationDir%%COMPUTERNAME%_%dateseed%"
+
+mkdir %destinationDir%
+
+set baseSrcDir=c:\Program Files\Logrhythm
+
+REM substract the day count from the current date
+
+set yyyy=2016
+
+set $tok=1-3
+for /f "tokens=1 delims=.:/-, " %%u in ('date /t') do set $d1=%%u
+if "%$d1:~0,1%" GTR "9" set $tok=2-4
+for /f "tokens=%$tok% delims=.:/-, " %%u in ('date /t') do (
+ for /f "skip=1 tokens=2-4 delims=/-,()." %%x in ('echo.^|date') do (
+    set %%x=%%u
+    set %%y=%%v
+    set %%z=%%w
+    set $d1=
+    set $tok=))
+
+if "%yyyy%"=="" set yyyy=%yy%
+if /I %yyyy% LSS 100 set /A yyyy=2000 + 1%yyyy% - 100
+
+set CurDate=%mm%/%dd%/%yyyy%
+
+set dayCnt=%1
+if "%dayCnt%"=="" set dayCnt=3
+
+REM Substract your days here
+set /A dd=1%dd% - 100 - %dayCnt%
+set /A mm=1%mm% - 100
+
+:CHKDAY
+
+if /I %dd% GTR 0 goto DONE
+
+set /A mm=%mm% - 1
+
+if /I %mm% GTR 0 goto ADJUSTDAY
+
+set /A mm=12
+set /A yyyy=%yyyy% - 1
+
+:ADJUSTDAY
+
+if %mm%==1 goto SET31
+if %mm%==2 goto LEAPCHK
+if %mm%==3 goto SET31
+if %mm%==4 goto SET30
+if %mm%==5 goto SET31
+if %mm%==6 goto SET30
+if %mm%==7 goto SET31
+if %mm%==8 goto SET31
+if %mm%==9 goto SET30
+if %mm%==10 goto SET31
+if %mm%==11 goto SET30
+REM ** Month 12 falls through
+
+:SET31
+
+set /A dd=31 + %dd%
+
+goto CHKDAY
+
+:SET30
+
+set /A dd=30 + %dd%
+
+goto CHKDAY
+
+:LEAPCHK
+
+set /A tt=%yyyy% %% 4
+
+if not %tt%==0 goto SET28
+
+set /A tt=%yyyy% %% 100
+
+if not %tt%==0 goto SET29
+
+set /A tt=%yyyy% %% 400
+
+if %tt%==0 goto SET29
+
+:SET28
+
+set /A dd=28 + %dd%
+
+goto CHKDAY
+
+:SET29
+
+set /A dd=29 + %dd%
+
+goto CHKDAY
+
+:DONE
+
+if /I %mm% LSS 10 set mm=0%mm%
+if /I %dd% LSS 10 set dd=0%dd%
+
+REM echo Date %dayCnt% day(s) before %CurDate% is %mm%/%dd%/%yyyy%
+
+echo *** Copying log files to %destinationDir% ***
+
+xcopy "%baseSrcDir%\Data Indexer\logs" "%destinationDir%\Data Indexer\logs\" /I /D:%mm%-%dd%-%yyyy% 
+xcopy  "%baseSrcDir%\Data Indexer\elasticsearch\logs" "%destinationDir%\Data Indexer\logs\" /I /D:%mm%-%dd%-%yyyy%
+xcopy  "%baseSrcDir%\Data Indexer\influxdb\data\stats\default" "%destinationDir%\Data Indexer\Grafana\" /I
+xcopy  "%baseSrcDir%\Data Indexer\configserver\conf" "%destinationDir%\Data Indexer\conf\" /I
+xcopy "%baseSrcDir%\LogRhythm Mediator Server\logs" "%destinationDir%\MediatorLogs\"  /D:%mm%-%dd%-%yyyy% /I
+xcopy "%baseSrcDir%\LogRhythm System Monitor\logs" "%destinationDir%\SCSMlogs\"  /D:%mm%-%dd%-%yyyy% /I
+xcopy "%baseSrcDir%\LogRhythm Job Manager\logs" "%destinationDir%\JobManagerLogs\"  /D:%mm%-%dd%-%yyyy% /I
+xcopy "%baseSrcDir%\LogRhythm AI Engine\logs" "%destinationDir%\AIELogs\"  /D:%mm%-%dd%-%yyyy% /I
+xcopy "%baseSrcDir%\LogRhythm Web Services\logs" "%destinationDir%\WebServicesLogs\"  /D:%mm%-%dd%-%yyyy% /I
+
+REM collect ES stats
+
+REM Add the curl path to the environment variable PATH
+PATH c:\program files\logrhythm\Data Indexer\tools;%PATH%
+
+echo *** Collecting ES stats to %destinationDir%\ES_Stats ***
+
+mkdir "%destinationDir%\ES_Stats\"
+
+curl localhost:9200/_cluster/health?pretty > "%destinationDir%\ES_Stats\health.txt"
+curl localhost:9200/_cat/indices?pretty > "%destinationDir%\ES_Stats\indices.txt"
+curl localhost:9200/_cat/shards?pretty >"%destinationDir%\ES_Stats\shards.txt"
+curl localhost:9200/_nodes/stats?pretty >"%destinationDir%\ES_Stats\stats.txt"
+curl localhost:9200/_nodes/hot_threads?pretty > "%destinationDir%\ES_Stats\threads.txt"
+
+REM Collect DXDATAPATH, DXCONFIGPATH, DXPATH environment variables.
+echo *** Collecting Enviroment Variables ***
+
+SET > "%destinationDir%\Data Indexer\conf\EnviromentVariables.txt""
+
+
+echo *** Collecting Java Processes data ***
+REM Collect Java mapping for performance counters
+wmic PROCESS where "name like '%%java%%'" get ProcessID,Caption,Commandline > "%destinationDir%\PerformanceCounters\javainfo.txt"
+
+:ZIP
+
+echo %vers% | find "Windows Server 2012" > nul
+if %ERRORLEVEL% == 0 goto ver_2012
+goto END
+
+:ver_2012:
+
+echo *** Zipping %destinationDir% ***
+
+	REM This is dependent on later versions of the .NET framework (does not work correctly on Win Server 2008 R2)
+	powershell.exe -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::CreateFromDirectory('%destinationDir%', '%destinationDir%.zip'); }"
+	echo *** Created %destinationDir%.zip  ***
+
+		if exist "%destinationDir%.zip" (
+			echo *** Deleting %destinationDir% ***
+			rd /s /q %destinationDir%
+		)
+	
+:END
