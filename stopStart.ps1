@@ -1,4 +1,7 @@
-﻿Do{
+﻿# Written by Luke Brewbaker - Software Quality Assurance Engineer @ LogRhythm.
+# Edited 2 May 2018
+
+Do{
 $input = Read-Host -Prompt '1:Start or 2:Stop services?'
 
 
