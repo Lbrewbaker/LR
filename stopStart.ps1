@@ -1,14 +1,12 @@
-﻿# Written by Luke Brewbaker - Software Quality Assurance Engineer @ LogRhythm.
-# Edited 2 May 2018
-
-Do{
+﻿Do{
 $input = Read-Host -Prompt '1:Start or 2:Stop services?'
 
 
 #starts services and exits script
 If ($input -eq 1){
 Write-Host "Starting Services"
-Get-Service | Where-Object {$_.displayName.StartsWith("LogRhythm")} | Start-Service
+Get-Service | Where-Object {$_.displayName.StartsWith("LogRhythm")} | Start-Service 
+Get-Service | Where-Object {$_.displayName.StartsWith("LogRhythm")} | Set-Service -StartupType Automatic
 break; 
 }
 
