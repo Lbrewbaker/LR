@@ -1,7 +1,10 @@
 #!/bin/bash
 
+# Automated ELK stack install for Deb and RHEL based systems.  You can either change version numbers in this script to the current ones, or update them once installed.  Also lays down Java if not previously installed. 
+
 #ONE LINE
 #sudo wget -Nnv 'https://gist.githubusercontent.com/kydouglas/1f68d69e856fd6d7dc223f8e1f5ae3b3/raw/f8c3b22b9d9c41093150b96c815776956b523d9d/elk.sh' && bash elk.sh && rm -f elk.sh
+
 
 # Checking whether user has enough permission to run this script
 sudo -n true
@@ -40,7 +43,7 @@ dependency_check_rpm() {
 debian_elk() {
     # resynchronize the package index files from their sources.
     sudo apt-get update
-    # Downloading debian package of logstash
+    # Downloading debian package of logstash  !!! Double check version numbers !!!
     sudo wget --directory-prefix=/opt/ https://artifacts.elastic.co/downloads/logstash/logstash-6.6.2.deb
     # Install logstash debian package
     sudo dpkg -i /opt/logstash-6.6.2.deb
@@ -64,7 +67,7 @@ debian_elk() {
 rpm_elk() {
     #Installing wget.
     sudo yum install wget -y
-    # Downloading rpm package of logstash
+    # Downloading rpm package of logstash !!! Double check version numbers !!!
     sudo wget --directory-prefix=/opt/ https://artifacts.elastic.co/downloads/logstash/logstash-6.6.2.rpm
     # Install logstash rpm package
     sudo rpm -ivh /opt/logstash-6.6.2.rpm
