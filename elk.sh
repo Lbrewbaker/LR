@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #ONE LINE
-#sudo wget -Nnv 'https://gist.github.com/Lbrewbaker/8a679ae532d58373c0979a7b08c284d6' && bash elk.sh && rm -f elk.sh
+#sudo wget -Nnv 'https://gist.githubusercontent.com/kydouglas/1f68d69e856fd6d7dc223f8e1f5ae3b3/raw/f8c3b22b9d9c41093150b96c815776956b523d9d/elk.sh' && bash elk.sh && rm -f elk.sh
 
 # Checking whether user has enough permission to run this script
 sudo -n true
@@ -98,3 +98,5 @@ elif [ "$(grep -Ei 'fedora|redhat|centos' /etc/*release)" ]
 else
     echo "This script doesn't support ELK installation on this OS."
 fi
+
+echo "All done.  Follow the rest of the guide here: https://www.elastic.co/guide/en/elastic-stack/current/installing-elastic-stack.html" 
