@@ -1,10 +1,3 @@
-/*************
-Author: 	Luke Brewbaker
-Date created: 	1 Apr 2019
-Purpose: 	Query InsightVM for a custom report.  Shows vulnerabilities 1 per line with asset information (including hostname), also queries proof to show the location of the vulnerabilities found.
-
-*************/
-
 WITH remediations AS (
     SELECT DISTINCT fr.solution_id AS ultimate_soln_id, summary, fix, estimate, riskscore, dshs.solution_id AS solution_id
     FROM fact_remediation(10,'riskscore DESC') fr
