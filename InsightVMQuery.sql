@@ -1,40 +1,73 @@
-WITH remediations AS (
-    SELECT DISTINCT fr.solution_id AS ultimate_soln_id, summary, fix, estimate, riskscore, dshs.solution_id AS solution_id
-    FROM fact_remediation(10,'riskscore DESC') fr
-    JOIN dim_solution ds USING (solution_id)
-    JOIN dim_solution_highest_supercedence dshs ON (fr.solution_id = dshs.superceding_solution_id AND ds.solution_id = dshs.superceding_solution_id)
+WITH asset_ips AS (
+              SELECT asset_id, ip_address, type
+              FROM dim_asset_ip_address dips
+              ),
+asset_addresses AS (
+                    SELECT da.asset_id,
+                    (SELECT array_to_string(array_agg(ip_address), ',') FROM asset_ips WHERE asset_id = da.asset_id AND type = 'IPv4') AS ipv4s,
+                    (SELECT array_to_string(array_agg(ip_address), ',') FROM asset_ips WHERE asset_id = da.asset_id AND type = 'IPv6') AS ipv6s,
+                    (SELECT array_to_string(array_agg(mac_address), ',') FROM dim_asset_mac_address WHERE asset_id = da.asset_id) AS macs
+                    FROM dim_asset da
+                    JOIN asset_ips USING (asset_id)
+                    ),
+asset_names AS (
+                SELECT asset_id, array_to_string(array_agg(host_name), ',') AS names
+                FROM dim_asset_host_name
+                GROUP BY asset_id
+                ),
+asset_facts AS (
+                SELECT asset_id, riskscore, exploits, malware_kits
+                FROM fact_asset
+                ),
+vulnerability_metadata AS (
+                           SELECT *
+                           FROM dim_vulnerability dv
+                           ),
+vuln_cves_ids AS (
+                  SELECT vulnerability_id, array_to_string(array_agg(reference), ',') AS cves
+                  FROM dim_vulnerability_reference
+                  GROUP BY vulnerability_id
+                  )
 
-),
-
-assets AS (
-	SELECT da.asset_id, da.host_name, da.ip_address, dos.description
-	FROM dim_asset da
-	JOIN dim_operating_system dos ON dos.operating_system_id = da.operating_system_id
-	JOIN fact_asset fa ON fa.asset_id = da.asset_id
-	GROUP BY da.asset_id, da.host_name, da.ip_address, dos.description
-)
 
 SELECT
-   dv.title AS "Vulnerability Title",
-   dv.nexpose_id AS "Vulerability ID",
-   dv.date_published AS "Date Published",
-   dv.riskscore	AS "Vulerability Risk Score",
-   a.host_name AS "Asset Hostname", 
-   a.ip_address AS "Asset IP", 
-   a.description AS "OS",
-   round(sum(dv.riskscore)) AS "Asset Risk Score",
-   r.summary AS "Solution",
-   r.fix as "Fix",
-   sol.solution_type AS "Type",
-   sol.additional_data AS "Additional Data",
-   fav.proof AS "Proof"
+da.ip_address AS "Asset IP Address",
+--favi.port AS "Service Port",
+--dp.name AS "Service Protocol",
+--dsvc.name AS "Service Name",
+an.names AS "Asset Names",
+dag.name AS "Asset Group",
+favi.date AS "Vulnerability Test Date",
+--dsc.started AS "Last Scan Time",
+--favi.scan_id AS "Scan ID",
+--ds.name AS "Site Name",
+--ds.importance AS "Site Importance",
+vm.date_published AS "Vulnerability Published Date",
+ROUND((EXTRACT(epoch FROM age(now(), date_published)) / (60 * 60 * 24))::numeric, 0) AS "Vulnerability Age",
+cves.cves AS "Vulnerability CVE IDs",
+vm.title AS "Vulnerability Title",
+vm.cvss_score AS "Vulnerability CVSS Score",
+proofAsText(vm.description) AS "Vulnerability Description",
+vm.nexpose_id AS "Vulnerability ID",
+vm.severity AS "Vulnerability Severity Level",
+dvs.description AS "Vulnerability Test Result Description",
+favi.proof AS "Proof"
 
-   
-FROM remediations r
-   JOIN dim_asset_vulnerability_solution dvs USING (solution_id)
-   JOIN dim_solution sol USING (solution_id)
-   JOIN dim_vulnerability dv USING (vulnerability_id)
-   JOIN assets AS a USING (asset_id)
-   JOIN fact_asset_vulnerability_instance fav USING (vulnerability_id)
 
-GROUP BY r.riskscore,dv.title, dv.nexpose_id, dv.date_published, dv.riskscore, a.host_name, a.ip_address, a.asset_id, r.summary, r.fix, a.description, sol.additional_data, sol.solution_type
+FROM fact_asset_vulnerability_instance favi
+JOIN dim_asset da USING (asset_id)
+LEFT OUTER JOIN asset_addresses aa USING (asset_id)
+LEFT OUTER JOIN asset_names an USING (asset_id)
+JOIN asset_facts af USING (asset_id)
+JOIN dim_service dsvc USING (service_id)
+JOIN dim_protocol dp USING (protocol_id)
+JOIN dim_site_asset dsa USING (asset_id)
+JOIN dim_asset_group_asset USING (asset_id)
+JOIN dim_asset_group dag USING (asset_group_id)
+JOIN dim_site ds USING (site_id)
+JOIN vulnerability_metadata vm USING (vulnerability_id)
+JOIN dim_vulnerability_status dvs USING (status_id)
+JOIN dim_operating_system dos USING (operating_system_id)
+
+--LEFT OUTER JOIN dim_scan dsc USING (scan_id)
+LEFT OUTER JOIN vuln_cves_ids cves USING (vulnerability_id)
