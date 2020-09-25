@@ -1,0 +1,6 @@
+// password spray attack
+SigninLogs
+| where ResultType == “50053” or ResultType == “50126”
+| project Identity, Location, IPAddress
+| summarize USERs = make_set(Identity) by Location, IPAddress
+| where USERs[1] != “”

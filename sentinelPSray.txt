@@ -1,0 +1,17 @@
+let valid_logons = (OfficeActivity
+    | where TimeGenerated > ago(30d)
+    | where Operation == 'UserLoggedIn'
+    | summarize by ClientIP);
+let only_invalid_logons = (OfficeActivity
+    | where TimeGenerated > ago(30d)
+    | where Operation == 'UserLoginFailed'
+    | summarize by ClientIP) 
+    | join kind=anti (valid_logons) on ClientIP;
+OfficeActivity
+    | where TimeGenerated > ago(30d)
+    | join kind=inner (only_invalid_logons) on ClientIP
+    | extend UserAgent=tostring(parse_json(ExtendedProperties)[0].Value)
+    | where (UserAgent matches regex 'Microsoft Office/\\d+\\.\\d+ \\(Windows NT \\d+\\.\\d+; Microsoft Outlook \\d+\\.\\d+\\.\\d+; Pro\\)'
+            or UserAgent == 'CBAInPROD'
+            or UserAgent matches regex '^[\\w\\.\\d\\-\\_]{4,15}\\/[\\.\\w\\d\\-\\_]{4,30}$')
+    | summarize by ClientIP, UserAgent
